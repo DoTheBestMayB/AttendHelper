@@ -9,6 +9,8 @@ import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -20,8 +22,10 @@ import java.text.MessageFormat;
 
 public class WebviewActivity extends AppCompatActivity {
     private static final String TAG = "WebviewActivity";
-    private static final String ID = "";
-    private static final String PW = "";
+    private static final int URL = 1;
+    private static final int JS = 2;
+    private static final String ID = "id";
+    private static final String PW = "1234";
 
     WebView webView;
     Handler handler = new Handler();
@@ -43,6 +47,7 @@ public class WebviewActivity extends AppCompatActivity {
         webSettings.setJavaScriptEnabled(true);
 
         webView.setWebViewClient(new ViewClient());
+        webView.setWebChromeClient(new ChromeClient());
 
         Button button = findViewById(R.id.button);
         button.setOnClickListener(new View.OnClickListener() {
@@ -81,18 +86,35 @@ public class WebviewActivity extends AppCompatActivity {
 
             Message message = Message.obtain();
             message.obj = "Done";
+            message.what = URL;
             thread.processHandler.sendMessage(message);
+        }
+    }
+
+    class ChromeClient extends WebChromeClient {
+        @Override
+        public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+            String msg = consoleMessage.message();
+            if (msg.contains("Mixed Content")) return super.onConsoleMessage(consoleMessage);
+
+            Log.d(TAG, "console Message: "+ msg);
+
+            Message message = Message.obtain();
+            message.obj = msg;
+            message.what = JS;
+            thread.processHandler.sendMessage(message);
+
+            return super.onConsoleMessage(consoleMessage);
         }
     }
 
     class WebViewThread extends Thread {
         String url;
-        ProcessHandler processHandler = new ProcessHandler();
+        volatile ProcessHandler processHandler = new ProcessHandler();
         Looper looper;
 
         public WebViewThread() {
             this("");
-
         }
 
         public WebViewThread(String url) {
@@ -116,12 +138,14 @@ public class WebviewActivity extends AppCompatActivity {
                 path = "//*[@id=\"a_footer_login_btn\"]";
                 clickElementById(findElementByXpath(path));
 
-                getCurrentUrl();
+                try{
+                    Thread.sleep(1500);
+                } catch (InterruptedException e){
+                    e.printStackTrace();
+                }
 
                 path = findElementByXpath("//*[@id=\"mainContentPlaceHolder_Login_tbUserID\"]");
                 sendKeyToElementById(path, ID);
-
-                getCurrentUrl();
 
                 path = findElementByXpath("//*[@id=\"mainContentPlaceHolder_Login_tbPassword\"]");
                 sendKeyToElementById(path, PW);
@@ -129,6 +153,18 @@ public class WebviewActivity extends AppCompatActivity {
                 path = "//*[@id=\"ContainerView\"]/div/div/div/div/div[4]/button";
                 clickElementById(findElementByXpath(path));
             }
+        }
+
+        private void waitUntilElementLocated(String scriptSentence) {
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    webView.loadUrl(scriptSentence);
+                }
+            });
+
+            looper = Looper.myLooper();
+            Looper.loop();
         }
 
         private void getCurrentUrl() {
@@ -189,9 +225,12 @@ public class WebviewActivity extends AppCompatActivity {
 
             public void handleMessage(Message msg) {
                 final String output = (String)msg.obj;
-                if (output.equals("Done")) {
+                if (msg.what == URL && output.contains("Done")) {
                     Log.d(TAG, "LoadURL Done");
-                    looper.quit();
+                    if (looper != null) looper.quit();
+                } else if (msg.what == JS && !output.contains("null")) {
+                    Log.d(TAG, "JS Done");
+                    if (looper != null) looper.quit();
                 }
             }
         }
