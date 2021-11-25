@@ -21,8 +21,8 @@ import java.text.MessageFormat;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class WebviewActivity extends AppCompatActivity {
-    private static final String TAG = "WebviewActivity";
+public class WebViewActivity extends AppCompatActivity {
+    private static final String TAG = "WebViewActivity";
     private static final String SC = "script Done";
     private static final int URL = 1;
     private static final int JS = 2;
@@ -34,6 +34,8 @@ public class WebviewActivity extends AppCompatActivity {
     WebViewThread thread;
     //    private TextView textViewResult;
     private EditText urlText;
+
+    // 의도하지 않은 lock release 방지용 변수
     private Boolean isPageRelease = false;
     private Boolean isConsoleRelease = false;
 
