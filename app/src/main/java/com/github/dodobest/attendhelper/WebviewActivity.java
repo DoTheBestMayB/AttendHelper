@@ -4,7 +4,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
@@ -19,19 +18,24 @@ import android.widget.Button;
 import android.widget.EditText;
 
 import java.text.MessageFormat;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class WebviewActivity extends AppCompatActivity {
     private static final String TAG = "WebviewActivity";
+    private static final String SC = "script Done";
     private static final int URL = 1;
     private static final int JS = 2;
-    private static final String ID = "id";
-    private static final String PW = "1234";
+    private static final String ID = "idid";
+    private static final String PW = "123456";
 
     WebView webView;
     Handler handler = new Handler();
     WebViewThread thread;
     //    private TextView textViewResult;
     private EditText urlText;
+    private Boolean isPageRelease = false;
+    private Boolean isConsoleRelease = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,8 +44,6 @@ public class WebviewActivity extends AppCompatActivity {
 
 //        textViewResult = findViewById(R.id.resultView);
         urlText = findViewById(R.id.urlText);
-
-
         webView = findViewById(R.id.webView);
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -58,8 +60,6 @@ public class WebviewActivity extends AppCompatActivity {
                     inputMethodManager.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
                 }
                 String url = urlText.getText().toString();
-                Log.d(TAG, "onClick Start");
-//                webView.loadUrl(url);
                 thread = new WebViewThread(url);
                 thread.start();
             }
@@ -82,12 +82,11 @@ public class WebviewActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
-            Log.d(TAG, "WebView get URL which is "+url);
 
-            Message message = Message.obtain();
-            message.obj = "Done";
-            message.what = URL;
-            thread.processHandler.sendMessage(message);
+            if (isPageRelease) {
+                thread.releaseLock();
+                isPageRelease = false;
+            }
         }
     }
 
@@ -95,13 +94,21 @@ public class WebviewActivity extends AppCompatActivity {
         @Override
         public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
             String msg = consoleMessage.message();
-            if (msg.contains("Mixed Content")) return super.onConsoleMessage(consoleMessage);
-
-            Log.d(TAG, "console Message: "+ msg);
+            if (!isConsoleRelease || msg.contains("Mixed Content")) {
+                return super.onConsoleMessage(consoleMessage);
+            }
 
             Message message = Message.obtain();
-            message.obj = msg;
             message.what = JS;
+
+            if (msg.contains(SC)) {
+                message.obj = "Done";
+            } else {
+                message.obj = "Again";
+            }
+
+            isConsoleRelease = false;
+//            Log.d(TAG, "console Message: "+ msg);
             thread.processHandler.sendMessage(message);
 
             return super.onConsoleMessage(consoleMessage);
@@ -110,8 +117,11 @@ public class WebviewActivity extends AppCompatActivity {
 
     class WebViewThread extends Thread {
         String url;
-        volatile ProcessHandler processHandler = new ProcessHandler();
-        Looper looper;
+        String executeCode;
+        ProcessHandler processHandler = new ProcessHandler();
+
+        private ReentrantLock lock = new ReentrantLock();
+        private Condition forThr = lock.newCondition();
 
         public WebViewThread() {
             this("");
@@ -126,75 +136,111 @@ public class WebviewActivity extends AppCompatActivity {
         }
 
         public void run() {
-            Looper.prepare();
-
-            loadUrlWithHandler(url);
+            isPageRelease = true;
+            loadUrl(url);
             Log.d(TAG, "URL is "+url);
 
-            if (url.contains("cgv")) {
+            if (getCurrentUrl().contains("cgv")) {
+                Log.d(TAG, "팝업 닫기 클릭");
                 String path = "//*[@id=\"popAdEvent\"]/div/div/div/div/div[2]/a";
                 clickElementById(findElementByXpath(path));
 
+                Log.d(TAG, "로그인 버튼 클릭");
                 path = "//*[@id=\"a_footer_login_btn\"]";
                 clickElementById(findElementByXpath(path));
 
-                try{
-                    Thread.sleep(1500);
-                } catch (InterruptedException e){
-                    e.printStackTrace();
-                }
-
+                Log.d(TAG, "아이디 입력");
                 path = findElementByXpath("//*[@id=\"mainContentPlaceHolder_Login_tbUserID\"]");
                 sendKeyToElementById(path, ID);
 
+                Log.d(TAG, "비밀번호 입력");
                 path = findElementByXpath("//*[@id=\"mainContentPlaceHolder_Login_tbPassword\"]");
                 sendKeyToElementById(path, PW);
 
+                Log.d(TAG, "로그인 버튼 클릭");
                 path = "//*[@id=\"ContainerView\"]/div/div/div/div/div[4]/button";
                 clickElementById(findElementByXpath(path));
             }
         }
 
-        private void waitUntilElementLocated(String scriptSentence) {
-            handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    webView.loadUrl(scriptSentence);
-                }
-            });
+        class ProcessHandler extends Handler {
+            public void handleMessage(Message msg) {
+                final String output = (String)msg.obj;
+                if (msg.what == JS && output.contains("Again")) {
+//                    Log.d(TAG, "JS Again");
 
-            looper = Looper.myLooper();
-            Looper.loop();
+                    isConsoleRelease = true;
+                    loadUrlWithoutLock(executeCode, 500);
+                } else {
+                    releaseLock();
+                }
+            }
         }
 
-        private void getCurrentUrl() {
-            handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    Log.d(TAG, webView.getUrl());
+        private String getCurrentUrl() {
+            lock.lock();
+            try {
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        url = webView.getUrl();
+                        thread.releaseLock();
+                    }
+                });
+                try {
+                    forThr.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-            });
+
+                return url;
+            } finally {
+                lock.unlock();
+            }
         }
 
-        private void loadUrlWithHandler(String url) {
+        private void loadUrl(String url) {
+            lock.lock();
+            try {
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        webView.loadUrl(url);
+                    }
+                });
+
+                try {
+                    forThr.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private void loadUrlWithoutLock(String sentence, int delayTime) {
+            if (delayTime > 0) {
+                try {
+                    Thread.sleep(delayTime);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
             handler.post(new Runnable() {
                 @Override
                 public void run() {
-                    webView.loadUrl(url);
+                    webView.loadUrl(sentence);
                 }
             });
-
-
-
-            looper = Looper.myLooper();
-            Looper.loop();
         }
 
         private String makeJavascriptSentence(String sentence, Boolean needFormatSetting) {
             if (needFormatSetting) {
-                return "javascript:(function()'{'" + sentence + "'}')()";
+                return "javascript:(function(callback)'{'" + sentence + "callback = function () '{'console.log(''" + SC + "'')'}';callback();'}')()";
             } else {
-                return "javascript:(function(){" + sentence + "})()";
+                return "javascript:(function(callback){" + sentence + "callback = function () '{'console.log(''" + SC + "'')'}';callback();'}')()";
             }
         }
 
@@ -202,36 +248,31 @@ public class WebviewActivity extends AppCompatActivity {
             String sentence = "l={0}const e=new Event(''click'');l.dispatchEvent(e);";
             sentence = makeJavascriptSentence(sentence, true);
 
-            String executeCode = MessageFormat.format(sentence, elementId);
-            Log.d(TAG, executeCode);
-            loadUrlWithHandler(executeCode);
+            executeCode = MessageFormat.format(sentence, elementId);
+            isConsoleRelease = true;
+            loadUrl(executeCode);
         }
 
         private void sendKeyToElementById(String elementId, String key) {
             String sentence = "l={0}l.value =\"" + key + "\";";
             sentence = makeJavascriptSentence(sentence, true);
 
-            String executeCode = MessageFormat.format(sentence, elementId);
-            Log.d(TAG, executeCode);
-            loadUrlWithHandler(executeCode);
+            executeCode = MessageFormat.format(sentence, elementId);
+            isConsoleRelease = true;
+            loadUrl(executeCode);
         }
 
         private String findElementByXpath(String path) {
-            return (String)MessageFormat.format("document.evaluate(''{0}'', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
+            return MessageFormat.format("document.evaluate(''{0}'', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
                     , path);
         }
 
-        class ProcessHandler extends Handler {
-
-            public void handleMessage(Message msg) {
-                final String output = (String)msg.obj;
-                if (msg.what == URL && output.contains("Done")) {
-                    Log.d(TAG, "LoadURL Done");
-                    if (looper != null) looper.quit();
-                } else if (msg.what == JS && !output.contains("null")) {
-                    Log.d(TAG, "JS Done");
-                    if (looper != null) looper.quit();
-                }
+        private void releaseLock() {
+            lock.lock();
+            try {
+                forThr.signal();
+            } finally {
+                lock.unlock();
             }
         }
     }
