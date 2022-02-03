@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".WebViewActivity"
+    tools:context=".WebViewActivityT"
     android:orientation="vertical">
 
     <LinearLayout
@@ -17,14 +17,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ems="10"
+            android:hint="@string/webView_editText_hint"
             android:inputType="textUri"
-            android:hint="주소값 입력" />
+            android:minHeight="48dp"
+            android:text="@string/cgv_url" />
 
         <Button
             android:id="@+id/button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="테스트"
+            android:text="@string/webView_button_text"
             android:textSize="14sp" />
 
     </LinearLayout>
@@ -33,7 +35,7 @@
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_weight="1"/>
 
 
