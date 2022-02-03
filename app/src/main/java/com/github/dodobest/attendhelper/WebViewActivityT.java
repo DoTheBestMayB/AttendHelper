@@ -21,7 +21,7 @@ import android.widget.EditText;
 
 import java.text.MessageFormat;
 
-public class WebViewActivity extends AppCompatActivity {
+public class WebViewActivityTm extends AppCompatActivity {
     private static final String TAG = "WebviewActivity";
     private static final int URL = 1;
     private static final int JS = 2;
