@@ -7,5 +7,6 @@ interface WebViewContract {
 
     interface Presenter {
 
+        fun startWebView(url: String)
     }
 }

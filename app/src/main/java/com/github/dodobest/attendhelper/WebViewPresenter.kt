@@ -1,6 +1,12 @@
 package com.github.dodobest.attendhelper
 
-class WebViewPresenter : WebViewContract.Presenter {
+class WebViewPresenter() : WebViewContract.Presenter {
+    private lateinit var thread: WebViewThread
+
+    override fun startWebView(url: String) {
+        thread = WebViewThread(url)
+        thread.start()
+    }
 
     companion object {
         private const val TAG = "WebViewActivity"
