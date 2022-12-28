@@ -1,8 +1,7 @@
-package com.github.dodobest.attendhelper
+package com.github.dodobest.attendhelper.ui
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.content.Intent
 import com.github.dodobest.attendhelper.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -17,19 +16,11 @@ class MainActivity : AppCompatActivity() {
         _binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setListener()
     }
 
     override fun onDestroy() {
         _binding = null
 
         super.onDestroy()
-    }
-
-    private fun setListener() {
-        binding.webViewButton.setOnClickListener {
-            val intent = Intent(this, WebViewActivity::class.java)
-            startActivity(intent)
-        }
     }
 }
