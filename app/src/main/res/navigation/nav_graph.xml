@@ -9,5 +9,14 @@
         android:id="@+id/main_fragment"
         android:name="com.github.dodobest.attendhelper.ui.main.MainFragment"
         android:label="@string/label_main"
-        tools:layout="@layout/fragment_main" />
+        tools:layout="@layout/fragment_main">
+        <action
+            android:id="@+id/action_main_fragment_to_visibleUiFragment"
+            app:destination="@id/visible_ui_fragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/visible_ui_fragment"
+        android:name="com.github.dodobest.attendhelper.ui.test.VisibleUiFragment"
+        android:label="fragment_visible_ui"
+        tools:layout="@layout/fragment_visible_ui" />
 </navigation>
